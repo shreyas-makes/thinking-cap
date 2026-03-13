@@ -1,0 +1,16 @@
+{
+  "name": "thinking-cap-flashcards",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node flashcards/bin/dev.mjs",
+    "event": "node flashcards/bin/event.mjs",
+    "flashcards:daemon": "node flashcards/bin/daemon.mjs",
+    "flashcards:sidecar": "node flashcards/bin/sidecar.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "gray-matter": "^4.0.3",
+    "@opencode-ai/plugin": "1.2.25"
+  }
+}
