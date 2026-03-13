@@ -66,6 +66,9 @@ export function isEphemeralLine(line) {
   if (/^([$>#]|```)/.test(trimmed)) return true
   if (/(tool output|trace|stdout|stderr|command history|temporary todo)/i.test(trimmed)) return true
   if (/\b(rg|grep|sed|awk|npm|pnpm|yarn|git|ls|cd|cat|mkdir|rm|mv|cp)\b/.test(trimmed)) return true
+  if (/^(i('| a)?ll|let'?s|now let me|next i('| a)?ll|first i('| a)?ll|we can|i updated|i changed|i ran)\b/i.test(trimmed)) {
+    return true
+  }
   if (/[./][\w/-]+\.\w+/.test(trimmed) && trimmed.length < 40) return true
   return false
 }

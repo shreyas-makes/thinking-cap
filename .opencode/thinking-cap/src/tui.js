@@ -3,44 +3,68 @@ import { DEFAULT_PORT } from "./constants.js"
 import { getState, sendReview } from "./http-client.js"
 import { wrapText } from "./utils.js"
 
+const BOLD = "\x1b[1m"
+const BRIGHT = "\x1b[97m"
+const RESET = "\x1b[0m"
+
 function clearScreen() {
   process.stdout.write("\x1b[2J\x1b[H")
+}
+
+function centerLine(line, width) {
+  const visible = line.replace(/\x1b\[[0-9;]*m/g, "")
+  const padding = Math.max(0, Math.floor((width - visible.length) / 2))
+  return `${" ".repeat(padding)}${line}`
+}
+
+function padLines(lines, width) {
+  return lines.map((line) => centerLine(line, width))
 }
 
 function renderScreen(state) {
   clearScreen()
   const width = Math.max(40, process.stdout.columns || 80)
-  const rule = "─".repeat(width)
-  const lines = [
-    `Thinking Cap  ${state.repoName || "No repo"}`,
-    rule,
-  ]
+  const height = Math.max(18, process.stdout.rows || 24)
+  const title = `${BOLD}${BRIGHT}T H I N K I N G   C A P${RESET}`
+  const lines = []
 
   if (state.mode === "idle") {
-    lines.push("Waiting for agent to think...")
+    lines.push(...padLines([
+      title,
+      "",
+      "No flashcards yet.",
+      "Cards appear here when your agents",
+      "start thinking..",
+    ], width))
   } else if (state.mode === "paused") {
-    lines.push("Paused - agent active")
-    if (state.card) lines.push("", `Resume ready: ${state.card.meta?.id || state.card.id}`)
+    lines.push(...padLines([
+      title,
+      "",
+      "Paused - agent active",
+      state.card ? `Resume ready: ${state.card.meta?.id || state.card.id}` : "",
+    ], width))
   } else if (state.card) {
-    lines.push(`Tags: ${(state.card.meta.tags || ["repo"]).join(", ")}`)
-    lines.push("")
-    lines.push(...wrapText(state.card.question, width - 2))
+    lines.push(...padLines([title, ""], width))
+    lines.push(...padLines([`Tags: ${(state.card.meta.tags || ["repo"]).join(", ")}`, ""], width))
+    lines.push(...padLines(wrapText(state.card.question, width - 12), width))
     lines.push("")
     if (state.mode === "answer") {
-      lines.push(...wrapText(state.card.answer, width - 2))
+      lines.push(...padLines(wrapText(state.card.answer, width - 12), width))
       lines.push("")
-      lines.push("[a] again   [g] good   [e] easy   [r] reject   [s] suspend   [n] next")
+      lines.push(centerLine("[a] again   [g] good   [e] easy   [r] reject   [s] suspend   [n] next", width))
     } else {
-      lines.push("[space] reveal   [n] next   [q] hide")
+      lines.push(centerLine("[space] reveal   [n] next   [q] hide", width))
     }
   } else {
-    lines.push(state.message || "No due cards right now.")
+    lines.push(...padLines([
+      title,
+      "",
+      state.message || "No due cards right now.",
+    ], width))
   }
 
-  lines.push("")
-  lines.push(rule)
-  lines.push("The sidecar stays idle until the daemon reports agent busy state.")
-  process.stdout.write(lines.join("\n"))
+  const topPadding = Math.max(1, Math.floor((height - lines.length) / 2))
+  process.stdout.write(`${"\n".repeat(topPadding)}${lines.join("\n")}`)
 }
 
 export async function startSidecar({ port = DEFAULT_PORT } = {}) {

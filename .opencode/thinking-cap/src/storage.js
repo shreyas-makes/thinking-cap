@@ -319,6 +319,23 @@ export function getSrsState(repoPath, cardId) {
   return row || null
 }
 
+export function listExistingCardFingerprints(repoPath) {
+  const { cardsDir } = preparePaths(repoPath)
+  if (!fs.existsSync(cardsDir)) return []
+
+  return fs
+    .readdirSync(cardsDir)
+    .filter((name) => name.endsWith(".md"))
+    .flatMap((fileName) => {
+      try {
+        const parsed = parseCardFile(path.join(cardsDir, fileName))
+        return [`${parsed.question.toLowerCase()}::${parsed.answer.toLowerCase()}`]
+      } catch {
+        return []
+      }
+    })
+}
+
 export function recordChatSource(repoPath, chatId, summary = "") {
   const { dbPath } = preparePaths(repoPath)
   sqliteExec(
@@ -446,7 +463,7 @@ export function writeGeneratedCard(repoPath, card) {
       source_chat_id: card.source_chat_id,
       confidence: card.confidence,
       created_at: createdAt,
-      generator_version: "v1",
+      generator_version: card.generator_version || "v2",
       card_type: "qa",
     }),
     `Q: ${card.question}`,

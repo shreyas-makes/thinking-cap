@@ -1,37 +1,69 @@
-# OpenCode Flashcards MVP
+# Thinking Cap
 
-This repo now contains a local OpenCode plugin MVP for repo-local flashcards during agent thinking time.
+Thinking Cap is an OpenCode plugin that turns agent idle time into repo-local spaced repetition.
 
-## Files
+When an OpenCode session becomes busy, the plugin notifies a local daemon. The daemon loads due flashcards for the current repo and a terminal sidecar renders them in a split pane. When a chat finishes, Thinking Cap can promote durable assistant reasoning into new cards stored alongside the repo's local plugin state.
 
-- `.opencode/plugins/flashcards.js` listens to OpenCode lifecycle events and forwards busy, idle, and chat transcript signals to the daemon.
-- `.opencode/flashcards/bin/daemon.mjs` runs the local HTTP daemon, persists SQLite SRS state, syncs markdown cards, and applies reviews.
-- `.opencode/flashcards/bin/sidecar.mjs` renders the sidecar TUI for a split terminal pane.
-- `.opencode/flashcards/lib/storage.mjs` handles repo setup, markdown card sync, SQLite schema, SRS updates, and heuristic chat-to-card generation.
+## What it does
 
-## Usage
+- listens to OpenCode lifecycle events through a repo-local plugin entrypoint
+- runs a local HTTP daemon for plugin-to-sidecar coordination
+- shows due cards in a terminal sidecar while the agent is thinking
+- stores card state locally in SQLite and markdown
+- generates candidate cards from assistant transcripts using simple heuristics
 
-1. Install dependencies:
+## Repo layout
+
+- `.opencode/plugins/thinking-cap.js`: OpenCode plugin entrypoint
+- `.opencode/thinking-cap/src/`: current daemon, sidecar, generator, CLI, and storage code
+- `.opencode/flashcards/`: local runtime state and the earlier MVP workspace layout
+- `spec.md`: product spec
+- `design-spec.md`: UI and interaction spec
+
+## Quick start
+
+1. Install workspace dependencies:
 
    ```bash
    npm install --prefix .opencode
    ```
 
-2. Start the daemon in one terminal:
+2. Start the daemon:
 
    ```bash
-   npm run flashcards:daemon --prefix .opencode
+   node .opencode/thinking-cap/src/cli.js daemon
    ```
 
 3. Start the sidecar in another terminal pane:
 
    ```bash
-   npm run flashcards:sidecar --prefix .opencode
+   node .opencode/thinking-cap/src/cli.js sidecar
    ```
 
-4. Run OpenCode in this repo. The plugin auto-initializes `.opencode/flashcards/`, keeps it in `.gitignore`, and shows due cards when the session becomes busy.
+4. Initialize repo-local storage if needed:
 
-## Notes
+   ```bash
+   node .opencode/thinking-cap/src/cli.js init
+   ```
 
-- The chat-to-card generator is heuristic in this MVP. It only promotes assistant transcript sentences that look like durable rationale or conventions.
-- The daemon uses localhost HTTP for IPC to keep the plugin and sidecar simple.
+5. Emit demo data locally:
+
+   ```bash
+   node .opencode/thinking-cap/src/cli.js demo
+   node .opencode/thinking-cap/src/cli.js event busy
+   node .opencode/thinking-cap/src/cli.js event idle
+   ```
+
+## OpenCode plugin path
+
+The plugin file OpenCode should load is:
+
+```text
+.opencode/plugins/thinking-cap.js
+```
+
+The plugin posts lifecycle events to a local daemon on `127.0.0.1` and keeps failures non-fatal so OpenCode sessions can continue even if the daemon is down.
+
+## Current status
+
+This repo is an active local plugin project. The core flow is implemented, but the transcript-to-card pipeline is still heuristic and the layout still contains some MVP-era files under `.opencode/flashcards`.
