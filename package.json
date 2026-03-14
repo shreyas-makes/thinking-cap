@@ -1,0 +1,41 @@
+{
+  "name": "thinking-cap",
+  "version": "0.1.0",
+  "description": "Repo-local flashcard sidecar for OpenCode",
+  "type": "module",
+  "keywords": [
+    "opencode",
+    "cli",
+    "sidecar",
+    "flashcards",
+    "spaced-repetition"
+  ],
+  "bin": {
+    "thinking-cap": "./.opencode/thinking-cap/src/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreyas-makes/thinking-cap.git"
+  },
+  "homepage": "https://github.com/shreyas-makes/thinking-cap#readme",
+  "bugs": {
+    "url": "https://github.com/shreyas-makes/thinking-cap/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    ".opencode/thinking-cap/src",
+    ".opencode/plugins/thinking-cap.js",
+    "README.md",
+    "docs"
+  ],
+  "dependencies": {
+    "@opencode-ai/plugin": "1.2.25",
+    "better-sqlite3": "^11.8.1",
+    "gray-matter": "^4.0.3"
+  }
+}

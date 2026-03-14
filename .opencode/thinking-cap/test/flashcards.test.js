@@ -12,6 +12,7 @@ import {
   listDueCards,
   reviewCard,
 } from "../src/storage.js"
+import { resolveCommandRepoPath } from "../src/utils.js"
 
 function makeRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "thinking-cap-test-"))
@@ -30,6 +31,32 @@ test("repo setup is idempotent and only adds one gitignore entry", () => {
   assert.equal(matches.length, 1)
   assert.equal(fs.existsSync(paths.configPath), true)
   assert.equal(fs.existsSync(paths.dbPath), true)
+})
+
+test("cli accepts positional project paths for setup and start", () => {
+  const fallbackPath = "/tmp/current-repo"
+
+  assert.equal(
+    resolveCommandRepoPath({ _: ["setup", "../other-repo"] }, "setup", fallbackPath),
+    path.resolve("../other-repo"),
+  )
+  assert.equal(
+    resolveCommandRepoPath({ _: ["start", "."] }, "start", fallbackPath),
+    path.resolve("."),
+  )
+})
+
+test("cli keeps event type separate from positional project paths", () => {
+  const fallbackPath = "/tmp/current-repo"
+
+  assert.equal(
+    resolveCommandRepoPath({ _: ["event", "busy", "../other-repo"] }, "event", fallbackPath),
+    path.resolve("../other-repo"),
+  )
+  assert.equal(
+    resolveCommandRepoPath({ _: ["event", "idle"], repo: "../flagged-repo" }, "event", fallbackPath),
+    path.resolve("../flagged-repo"),
+  )
 })
 
 test("generator ignores ephemeral command chatter and keeps durable insights", () => {

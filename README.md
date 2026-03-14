@@ -17,42 +17,69 @@ When an OpenCode session becomes busy, the plugin notifies a local daemon. The d
 - `.opencode/plugins/thinking-cap.js`: OpenCode plugin entrypoint
 - `.opencode/thinking-cap/src/`: current daemon, sidecar, generator, CLI, and storage code
 - `.opencode/flashcards/`: local runtime state and the earlier MVP workspace layout
-- `spec.md`: product spec
-- `design-spec.md`: UI and interaction spec
+- `docs/spec.md`: product spec
+- `docs/design-spec.md`: UI and interaction spec
+- `docs/setup.md`: setup and sidecar workflow
 
 ## Quick start
 
-1. Install workspace dependencies:
+Install and configure Thinking Cap in a repo with:
+
+```bash
+npx thinking-cap setup .
+```
+
+Then run the sidecar stack with:
+
+```bash
+npx thinking-cap start .
+```
+
+## Install
+
+Use `npx` if you want zero permanent install:
+
+```bash
+npx thinking-cap setup .
+npx thinking-cap start .
+```
+
+Or install it globally:
+
+```bash
+npm install -g thinking-cap
+thinking-cap setup .
+thinking-cap start .
+```
+
+## Quick start
+
+1. Configure the repo and install local workspace dependencies:
 
    ```bash
-   npm install --prefix .opencode
+   npx thinking-cap setup .
    ```
 
-2. Start the daemon:
+2. Launch the daemon and sidecar together in your side pane:
 
    ```bash
-   node .opencode/thinking-cap/src/cli.js daemon
+   npx thinking-cap start .
    ```
 
-3. Start the sidecar in another terminal pane:
+3. Emit demo data locally if you want to test the flow:
 
    ```bash
-   node .opencode/thinking-cap/src/cli.js sidecar
+   npx thinking-cap demo .
+   npx thinking-cap event busy .
+   npx thinking-cap event idle .
    ```
 
-4. Initialize repo-local storage if needed:
+You can also target another repo explicitly:
 
-   ```bash
-   node .opencode/thinking-cap/src/cli.js init
-   ```
-
-5. Emit demo data locally:
-
-   ```bash
-   node .opencode/thinking-cap/src/cli.js demo
-   node .opencode/thinking-cap/src/cli.js event busy
-   node .opencode/thinking-cap/src/cli.js event idle
-   ```
+```bash
+npx thinking-cap setup ~/code/my-project
+npx thinking-cap start ~/code/my-project
+```
 
 ## OpenCode plugin path
 
@@ -67,3 +94,7 @@ The plugin posts lifecycle events to a local daemon on `127.0.0.1` and keeps fai
 ## Current status
 
 This repo is an active local plugin project. The core flow is implemented, but the transcript-to-card pipeline is still heuristic and the layout still contains some MVP-era files under `.opencode/flashcards`.
+
+## Publishing
+
+Release notes and npm publish steps live in `docs/release.md`.

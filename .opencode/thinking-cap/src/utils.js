@@ -6,6 +6,30 @@ export function resolveRepoPath(inputPath = process.cwd()) {
   return path.resolve(inputPath)
 }
 
+export function resolveCommandRepoPath(args, command, fallbackPath) {
+  if (args.repo) return resolveRepoPath(args.repo)
+
+  const positionalRepoCommands = new Set([
+    "init",
+    "setup",
+    "start",
+    "daemon",
+    "sidecar",
+    "demo",
+    "generate",
+  ])
+
+  if (command === "event" && args._[2]) {
+    return resolveRepoPath(args._[2])
+  }
+
+  if (positionalRepoCommands.has(command) && args._[1]) {
+    return resolveRepoPath(args._[1])
+  }
+
+  return resolveRepoPath(fallbackPath)
+}
+
 export function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true })
 }

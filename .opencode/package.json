@@ -3,14 +3,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node flashcards/bin/dev.mjs",
-    "event": "node flashcards/bin/event.mjs",
+    "init": "node thinking-cap/src/cli.js init",
+    "setup": "node thinking-cap/src/cli.js setup",
+    "start": "node thinking-cap/src/cli.js start",
+    "dev": "node thinking-cap/src/cli.js start",
+    "demo": "node thinking-cap/src/cli.js demo",
+    "event": "node thinking-cap/src/cli.js event",
     "flashcards:daemon": "node flashcards/bin/daemon.mjs",
-    "flashcards:sidecar": "node flashcards/bin/sidecar.mjs"
+    "flashcards:sidecar": "node flashcards/bin/sidecar.mjs",
+    "thinking-cap:daemon": "node thinking-cap/src/cli.js daemon",
+    "thinking-cap:sidecar": "node thinking-cap/src/cli.js sidecar",
+    "thinking-cap:event": "node thinking-cap/src/cli.js event"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
     "gray-matter": "^4.0.3",
-    "@opencode-ai/plugin": "1.2.25"
+    "@opencode-ai/plugin": "1.2.26"
   }
 }
