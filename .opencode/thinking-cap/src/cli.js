@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon } from "./daemon.js";
@@ -15,6 +16,7 @@ import {
   parseArgs,
   repoNameFromPath,
   resolveCommandRepoPath,
+  writeJson,
 } from "./utils.js";
 
 const args = parseArgs(process.argv.slice(2));
@@ -33,9 +35,14 @@ const inferredRepoPath =
     : process.cwd();
 const repoPath = resolveCommandRepoPath(args, command, inferredRepoPath);
 const port = Number(args.port || DEFAULT_PORT);
+const SETUP_CHAT_ID = "setup-initial";
 
 function describeRepo(targetRepoPath) {
   return `${repoNameFromPath(targetRepoPath)} (${homeRelative(targetRepoPath)})`;
+}
+
+function formatCardCount(count) {
+  return `${count} flashcard${count === 1 ? "" : "s"}`;
 }
 
 function installPlugin(targetRepoPath, force = false) {
@@ -84,6 +91,56 @@ function installLocalWorkspaceDeps(targetRepoPath) {
   return { installed: true, packageManager };
 }
 
+function daemonUrlForPort(targetPort) {
+  return `http://127.0.0.1:${targetPort}/events`;
+}
+
+async function canListenOnPort(targetPort) {
+  return new Promise((resolve, reject) => {
+    const tester = net.createServer();
+    tester.once("error", (error) => {
+      if (error.code === "EADDRINUSE") {
+        resolve(false);
+        return;
+      }
+
+      reject(error);
+    });
+    tester.once("listening", () => {
+      tester.close(() => resolve(true));
+    });
+    tester.listen(targetPort, "127.0.0.1");
+  });
+}
+
+async function findOpenPort(preferredPort) {
+  if (await canListenOnPort(preferredPort)) return preferredPort;
+
+  return new Promise((resolve, reject) => {
+    const tester = net.createServer();
+    tester.once("error", reject);
+    tester.once("listening", () => {
+      const address = tester.address();
+      const openPort = typeof address === "object" && address ? address.port : null;
+      tester.close((error) => {
+        if (error) return reject(error);
+        if (!openPort) return reject(new Error("Unable to determine an open daemon port."));
+        resolve(openPort);
+      });
+    });
+    tester.listen(0, "127.0.0.1");
+  });
+}
+
+function writeRuntimeConfig(targetRepoPath, targetPort) {
+  const runtimePath = path.join(targetRepoPath, ".opencode", "flashcards", "runtime.json");
+  writeJson(runtimePath, {
+    daemonUrl: daemonUrlForPort(targetPort),
+    port: targetPort,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 async function main() {
   if (command === "init") {
     const paths = ensureRepoSetup(repoPath);
@@ -97,6 +154,7 @@ async function main() {
     const plugin = installPlugin(repoPath, Boolean(args.force));
     const deps = installLocalWorkspaceDeps(repoPath);
     const paths = ensureRepoSetup(repoPath);
+    const generation = generateCardsFromTranscript(repoPath, SETUP_CHAT_ID, "");
     const pluginMessage =
       plugin.status === "written"
         ? `Installed OpenCode plugin at ${plugin.pluginPath}`
@@ -106,14 +164,22 @@ async function main() {
     const depsMessage = deps.installed
       ? `Installed workspace dependencies with ${deps.packageManager}`
       : "Skipped workspace dependency install because .opencode/package.json is missing";
+    const cardsMessage = generation.cards.length
+      ? `Created ${formatCardCount(generation.cards.length)} from your repo notes.`
+      : "Created 0 flashcards for now. Add durable notes in README/docs and setup will pick them up next time.";
 
     process.stdout.write(
       [
-        `Thinking Cap setup complete for ${describeRepo(repoPath)}.`,
-        pluginMessage,
-        depsMessage,
-        `Initialized repo-local storage at ${paths.flashcardRoot}`,
-        `Run \`thinking-cap start ${homeRelative(repoPath)}\` in your side pane to launch the daemon and sidecar together.`,
+        `Thinking Cap is ready for ${describeRepo(repoPath)}.`,
+        "",
+        "What happened:",
+        `- ${pluginMessage}`,
+        `- ${depsMessage}`,
+        `- Initialized repo-local storage at ${paths.flashcardRoot}`,
+        `- ${cardsMessage}`,
+        "",
+        "Next step:",
+        `- Run \`thinking-cap start ${homeRelative(repoPath)}\` in your side pane to launch the daemon and sidecar.`,
       ].join("\n"),
     );
     process.stdout.write("\n");
@@ -121,15 +187,21 @@ async function main() {
   }
 
   if (command === "start") {
+    const selectedPort = await findOpenPort(port);
     ensureRepoSetup(repoPath);
-    startDaemon({ port });
-    await startSidecar({ port });
+    writeRuntimeConfig(repoPath, selectedPort);
+    if (selectedPort !== port) {
+      process.stdout.write(`Port ${port} is busy, using ${selectedPort} for ${describeRepo(repoPath)}.\n`);
+    }
+    await startDaemon({ port: selectedPort });
+    await startSidecar({ port: selectedPort });
     return;
   }
 
   if (command === "daemon") {
     ensureRepoSetup(repoPath);
-    startDaemon({ port });
+    writeRuntimeConfig(repoPath, port);
+    await startDaemon({ port });
     return;
   }
 

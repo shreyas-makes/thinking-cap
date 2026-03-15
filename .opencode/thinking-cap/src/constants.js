@@ -4,6 +4,7 @@ export const FLASHCARD_ROOT = path.join(".opencode", "flashcards")
 export const CARDS_DIR = path.join(FLASHCARD_ROOT, "cards")
 export const LOGS_DIR = path.join(FLASHCARD_ROOT, "logs")
 export const CONFIG_PATH = path.join(FLASHCARD_ROOT, "config.json")
+export const RUNTIME_PATH = path.join(FLASHCARD_ROOT, "runtime.json")
 export const DB_PATH = path.join(FLASHCARD_ROOT, "state.db")
 export const GITIGNORE_ENTRY = ".opencode/flashcards/"
 export const DEFAULT_PORT = 47231
@@ -17,10 +18,14 @@ export const DEFAULT_CONFIG = {
     sqlite_path: DB_PATH,
   },
   generation: {
-    trigger: "chat_closed",
+    trigger: "continuous",
     auto_activate: true,
     allow_reject_forever: true,
-    source: "chat_only",
+    source: "chat_docs_code",
+    cooldown_ms: 1200,
+    min_ready_cards: 4,
+    low_queue_threshold: 1,
+    max_cards_per_run: 3,
   },
 }
 

@@ -1,5 +1,23 @@
 const DEFAULT_DAEMON_URL = "http://127.0.0.1:47231/events"
 
+function runtimeConfigPath(repoRoot) {
+  return `${repoRoot}/.opencode/flashcards/runtime.json`
+}
+
+async function daemonUrlForRepo(repoRoot) {
+  if (process.env.THINKING_CAP_DAEMON_URL) return process.env.THINKING_CAP_DAEMON_URL
+
+  try {
+    const raw = await Bun.file(runtimeConfigPath(repoRoot)).text()
+    const config = JSON.parse(raw)
+    if (typeof config?.daemonUrl === "string" && config.daemonUrl) return config.daemonUrl
+  } catch {
+    // fall back to the default daemon URL
+  }
+
+  return DEFAULT_DAEMON_URL
+}
+
 async function postEvent(url, payload, client) {
   try {
     await fetch(url, {
@@ -21,10 +39,10 @@ async function postEvent(url, payload, client) {
 
 export const ThinkingCapPlugin = async ({ client, directory, worktree }) => {
   const repo = worktree || directory
-  const daemonUrl = process.env.THINKING_CAP_DAEMON_URL || DEFAULT_DAEMON_URL
 
   return {
     event: async ({ event }) => {
+      const daemonUrl = await daemonUrlForRepo(repo)
       if (event.type === "session.status" && event.properties?.status === "busy") {
         await postEvent(daemonUrl, { type: "busy", repo, sessionId: event.properties?.sessionID }, client)
       }

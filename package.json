@@ -10,9 +10,7 @@
     "flashcards",
     "spaced-repetition"
   ],
-  "bin": {
-    "thinking-cap": "./.opencode/thinking-cap/src/cli.js"
-  },
+  "bin": ".opencode/thinking-cap/src/cli.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/shreyas-makes/thinking-cap.git"

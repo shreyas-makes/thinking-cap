@@ -9,6 +9,7 @@ import {
   FLASHCARD_ROOT,
   GITIGNORE_ENTRY,
   LOGS_DIR,
+  RUNTIME_PATH,
   VALID_CARD_STATUSES,
 } from "./constants.js"
 import { ensureDir, nowIso, readJson, repoNameFromPath, resolveRepoPath, slugify, writeJson } from "./utils.js"
@@ -63,6 +64,7 @@ export function getPaths(repoPath) {
     logsDir: path.join(root, LOGS_DIR),
     dbPath: path.join(root, DB_PATH),
     configPath: path.join(root, CONFIG_PATH),
+    runtimePath: path.join(root, RUNTIME_PATH),
     gitignorePath: path.join(root, ".gitignore"),
   }
 }
@@ -90,7 +92,19 @@ export function ensureRepoSetup(repoPath) {
 
 export function loadConfig(repoPath) {
   const { configPath } = getPaths(repoPath)
-  return { ...DEFAULT_CONFIG, ...readJson(configPath, DEFAULT_CONFIG) }
+  const stored = readJson(configPath, DEFAULT_CONFIG) || {}
+  return {
+    ...DEFAULT_CONFIG,
+    ...stored,
+    storage: {
+      ...DEFAULT_CONFIG.storage,
+      ...(stored.storage || {}),
+    },
+    generation: {
+      ...DEFAULT_CONFIG.generation,
+      ...(stored.generation || {}),
+    },
+  }
 }
 
 export function initDb(dbPath) {
@@ -193,7 +207,15 @@ export function syncCards(repoPath) {
       const parsed = parseCardFile(absolutePath)
       const meta = parsed.meta
       const id = meta.id || fileName.replace(/\.md$/, "")
-      const status = VALID_CARD_STATUSES.has(meta.status) ? meta.status : "active"
+      const [existingCard] = sqliteJson(
+        dbPath,
+        `SELECT status FROM cards WHERE id = ${escapeSql(id)} LIMIT 1;`,
+      )
+      const fileStatus = VALID_CARD_STATUSES.has(meta.status) ? meta.status : "active"
+      const status =
+        fileStatus === "active" && ["suspended", "rejected", "archived"].includes(existingCard?.status)
+          ? existingCard.status
+          : fileStatus
       const createdAt = meta.created_at || now
       const updatedAt = now
 
@@ -288,6 +310,31 @@ export function listDueCards(repoPath, limit = 3) {
     LIMIT ${Number(limit) || 3};
   `,
   )
+}
+
+export function listStudyCards(repoPath, limit = 3) {
+  const dueCards = listDueCards(repoPath, limit)
+  if (dueCards.length) return dueCards
+
+  const { dbPath } = preparePaths(repoPath)
+  const repo = repoNameFromPath(repoPath)
+  return sqliteJson(
+    dbPath,
+    `
+    SELECT c.id, c.path, c.status, s.due_at, s.reps, s.ease, s.interval_days
+    FROM cards c
+    JOIN srs_state s ON s.card_id = c.id
+    WHERE c.repo = ${escapeSql(repo)}
+      AND c.status = 'active'
+      AND (s.buried_until IS NULL OR ${sqliteDateExpr("s.buried_until")} <= CURRENT_TIMESTAMP)
+    ORDER BY (s.last_reviewed_at IS NOT NULL) ASC, s.reps ASC, ${sqliteDateExpr("s.last_reviewed_at")} ASC, s.due_at ASC
+    LIMIT ${Number(limit) || 3};
+  `,
+  )
+}
+
+export function countReadyCards(repoPath, limit = 10) {
+  return listStudyCards(repoPath, limit).length
 }
 
 export function getCardContent(repoPath, cardId) {
@@ -403,17 +450,27 @@ export function reviewCard(repoPath, cardId, action) {
 
   if (action === "again") {
     ease = Math.max(1.3, prevEase - 0.2)
-    intervalDays = Math.max(0, prevInterval * 0.25)
+    intervalDays = 0.002
     lapses += 1
-    nextDueAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+    nextDueAt = new Date(Date.now() + 2 * 60 * 1000).toISOString()
   } else if (action === "good") {
     reps += 1
-    intervalDays = prevReps === 0 ? 1 : Math.max(1, prevInterval * prevEase)
+    intervalDays =
+      prevReps === 0
+        ? 0.014
+        : prevReps === 1
+          ? 0.167
+          : Math.max(0.5, prevInterval * Math.min(prevEase, 1.8))
     nextDueAt = new Date(Date.now() + intervalDays * 86400000).toISOString()
   } else if (action === "easy") {
     reps += 1
-    ease = prevEase + 0.15
-    intervalDays = prevReps === 0 ? 3 : Math.max(3, prevInterval * prevEase * 1.3)
+    ease = prevEase + 0.1
+    intervalDays =
+      prevReps === 0
+        ? 0.083
+        : prevReps === 1
+          ? 0.5
+          : Math.max(1, prevInterval * Math.min(prevEase + 0.1, 2.1))
     nextDueAt = new Date(Date.now() + intervalDays * 86400000).toISOString()
   } else {
     throw new Error(`Unsupported review action: ${action}`)

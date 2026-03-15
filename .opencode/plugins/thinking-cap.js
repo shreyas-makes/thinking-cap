@@ -1,7 +1,25 @@
 import fs from "node:fs"
 import path from "node:path"
 
-const DEFAULT_URL = process.env.OPENCODE_FLASHCARDS_URL || "http://127.0.0.1:43117"
+const DEFAULT_URL = process.env.THINKING_CAP_DAEMON_URL || "http://127.0.0.1:47231/events"
+
+function runtimeConfigPath(repoRoot) {
+  return path.join(repoRoot, ".opencode", "flashcards", "runtime.json")
+}
+
+function daemonUrlForRepo(repoRoot) {
+  if (process.env.THINKING_CAP_DAEMON_URL) return process.env.THINKING_CAP_DAEMON_URL
+
+  try {
+    const raw = fs.readFileSync(runtimeConfigPath(repoRoot), "utf8")
+    const config = JSON.parse(raw)
+    if (typeof config?.daemonUrl === "string" && config.daemonUrl) return config.daemonUrl
+  } catch {
+    // fall back to the default daemon URL
+  }
+
+  return DEFAULT_URL
+}
 
 function repoNameFromPath(input) {
   if (!input) return "unknown-repo"
@@ -56,21 +74,22 @@ function statusValue(event) {
   return properties.status || properties.state || properties.mode || null
 }
 
-async function post(pathname, body, client) {
+async function postEvent(body, client) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 1200)
+  const daemonUrl = daemonUrlForRepo(body.repo || process.cwd())
 
   try {
-    await fetch(`${DEFAULT_URL}${pathname}`, {
+    await fetch(daemonUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
       signal: controller.signal,
     })
   } catch (error) {
-    appendLog(body.repoRoot, "daemon_post_failed", {
-      path: pathname,
+    appendLog(body.repo || process.cwd(), "daemon_post_failed", {
       repo: body.repo,
+      type: body.type,
       sessionId: body.sessionId || null,
       error: error.message,
     })
@@ -82,9 +101,9 @@ async function post(pathname, body, client) {
           message: "Failed to reach flashcard daemon",
           extra: {
             error: error.message,
-            path: pathname,
+            daemonUrl,
             repo: body.repo,
-            repoRoot: body.repoRoot,
+            type: body.type,
             sessionId: body.sessionId || null,
           },
         },
@@ -119,11 +138,6 @@ export const ThinkingCapPlugin = async (ctx) => {
 
   appendLog(repo.root, "plugin_initialized", { repo: repo.name, root: repo.root })
 
-  await post("/init", {
-    repo: repo.name,
-    repoRoot: repo.root,
-  }, ctx.client)
-
   return {
     event: async ({ event }) => {
       const type = event?.type
@@ -134,9 +148,9 @@ export const ThinkingCapPlugin = async (ctx) => {
       if (type === "session.status") {
         if (sessionId && !busySessions.has(sessionId)) {
           busySessions.add(sessionId)
-          await post("/busy", {
-            repo: repo.name,
-            repoRoot: repo.root,
+          await postEvent({
+            type: "busy",
+            repo: repo.root,
             sessionId,
             status: status || "busy",
           }, ctx.client)
@@ -146,9 +160,9 @@ export const ThinkingCapPlugin = async (ctx) => {
 
       if (type === "message.part.delta" || type === "session.idle") {
         if (sessionId) busySessions.delete(sessionId)
-        await post("/idle", {
-          repo: repo.name,
-          repoRoot: repo.root,
+        await postEvent({
+          type: "idle",
+          repo: repo.root,
           sessionId,
           reason: type,
         }, ctx.client)
@@ -159,9 +173,9 @@ export const ThinkingCapPlugin = async (ctx) => {
         if (sessionId && !generatedSessions.has(sessionId)) {
           generatedSessions.add(sessionId)
           const transcript = await fetchTranscript(ctx.client, sessionId)
-          await post("/chat-closed", {
-            repo: repo.name,
-            repoRoot: repo.root,
+          await postEvent({
+            type: "chat_closed",
+            repo: repo.root,
             chatId: sessionId,
             sessionId,
             transcript,
